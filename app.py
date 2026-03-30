@@ -169,27 +169,6 @@ if check_click:
                             h_set.add(home_team_name)
                             a_set.add(away_team_name)
                 
-                # Fetch from API-Sports (Example for Premier League, need to adapt for other leagues)
-                # This part needs more robust league code mapping for API-Sports
-                # For now, I\'ll add a placeholder for API-Sports integration
-                # You would need to adjust the API-Sports league IDs and endpoint based on their documentation
-                # For simplicity, I\'m just showing how to integrate the get_team_id function
-                # and assuming API-Sports data fetching would be similar.
-
-                # Example for API-Sports (conceptual, needs actual API-Sports league IDs and endpoints)
-                # if league_display_name in ["Premier League (England)", "La Liga (Spain)", "Serie A (Italy)", "Bundesliga (Germany)", "Ligue 1 (France)"]:
-                #     api_sports_league_id = get_api_sports_league_id(league_display_name) # You\'d need a function for this
-                #     if api_sports_league_id:
-                #         url_api_sports = f"https://v3.football.api-sports.io/fixtures?league={api_sports_league_id}&season=2023&date={sel_date}"
-                #         headers_api_sports = {"x-apisports-key": api_sports_token}
-                #         response_api_sports = requests.get(url_api_sports, headers=headers_api_sports)
-                #         data_api_sports = response_api_sports.json()
-                #         matches_api_sports = data_api_sports.get("response", [])
-                #         for m_api in matches_api_sports:
-                #             # Process API-Sports matches and add to all_matches list
-                #             # Ensure no duplicates if both APIs return the same match
-                #             pass
-
                 st.session_state.display_matches = all_matches
                 st.session_state.h_teams = ["Select Team"] + sorted(list(h_set)) if h_set else ["No matches found"]
                 st.session_state.a_teams = ["Select Team"] + sorted(list(a_set)) if a_set else ["No matches found"]
@@ -232,7 +211,9 @@ if st.session_state.display_matches:
             """, unsafe_allow_html=True)
 
 # Prediction Section
-if st.session_state.check_performed and st.session_state.display_matches:
+if st.session_state.check_performed and not st.session_state.display_matches:
+    st.warning(LANG_MAP[lang]["no_fixture"])
+elif st.session_state.check_performed and st.session_state.display_matches:
     st.markdown(f"<div class=\"title-style\">{LANG_MAP[lang]["title2"]}</div>", unsafe_allow_html=True)
     
     col_home, col_away = st.columns(2)
@@ -281,6 +262,4 @@ if st.session_state.check_performed and st.session_state.display_matches:
             st.warning(LANG_MAP[lang]["no_match"])
     else:
         st.info("Please select both home and away teams to generate predictions.")
-elif st.session_state.check_performed and not st.session_state.display_matches:
-    st.warning(LANG_MAP[lang]["no_fixture"])
-
+                    
