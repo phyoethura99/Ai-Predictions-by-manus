@@ -1,7 +1,7 @@
 import streamlit as st
 import datetime
 import requests
-from google import genai  # Warning ပျောက်ရန် Version အသစ်သို့ ပြောင်းလဲခြင်း
+from google import genai
 import time
 import json
 import os
@@ -31,7 +31,6 @@ def get_disk_cache(key):
             with open(file_path, "r") as f:
                 cache_data = json.load(f)
                 expiry = datetime.datetime.fromisoformat(cache_data['expiry'])
-                # Timezone-aware object သုံး၍ နှိုင်းယှဉ်ခြင်း
                 if datetime.datetime.now(datetime.timezone.utc) < expiry.replace(tzinfo=datetime.timezone.utc):
                     return cache_data['data']
         except:
@@ -50,13 +49,11 @@ def set_disk_cache(key, data, expiry_dt=None, days=19):
     except Exception as e:
         st.sidebar.error(f"Cache Error: {str(e)}")
 
-# Time Handling (Warning ပျောက်ရန် utcnow အစား timezone-aware object သုံးခြင်း)
+# Time Handling
 now_mm = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=6, minutes=30)
 today_mm = now_mm.date()
-yesterday_mm = today_mm - datetime.timedelta(days=1)
-tomorrow_mm = today_mm + datetime.timedelta(days=1)
 
-# ၁။ Dictionary & Session State
+# Dictionary & Session State
 if 'lang' not in st.session_state:
     st.session_state.lang = 'EN'
 if 'h_teams' not in st.session_state:
@@ -138,8 +135,7 @@ with col_lang:
 
 st.markdown(f'<div class="title-style">{d[lang]["title1"]}</div>', unsafe_allow_html=True)
 
-
-# ၂။ Select League & Date
+# Select League & Date
 st.markdown(f'<p style="color:#aaa; margin-left:15px;">{d[lang]["sel_league"]}</p>', unsafe_allow_html=True)
 league_keys = list(league_codes.keys())
 league = st.selectbox("L", league_keys, index=1, label_visibility="collapsed")
@@ -148,9 +144,8 @@ st.markdown(f'<p style="color:#aaa; margin-left:15px; margin-top:15px;">{d[lang]
 date_option = st.radio("Date Option", d[lang]['date_opts'], horizontal=True, label_visibility="collapsed")
 sel_date = st.date_input("D", value=today_mm, min_value=today_mm, label_visibility="collapsed")
 
-# ၃။ Check Matches Now
+# Check Matches Now
 st.markdown('<div class="check-btn-wrapper">', unsafe_allow_html=True)
-# ပြင်ဆင်ချက်- d[lang][] နေရာတွင် d[lang]["btn_check"] ဟု ဖြည့်စွက်ထားသည်
 check_click = st.button(d[lang]["btn_check"], key="check_btn", use_container_width=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
@@ -262,114 +257,82 @@ elif st.session_state.check_performed:
         </div>
     """, unsafe_allow_html=True)
 
-
-    # ၄။ Select Team Title
 st.markdown(f'<div class="title-style" style="font-size:45px; margin-top:20px;">{d[lang]["title2"]}</div>', unsafe_allow_html=True)
 
-# --- Helper: API-Sports Data Fetching with Strict ID & League Info ---
-def get_api_sports_stats(h_team, a_team, match_date, h_id=None, a_id=None):
+# --- Helper: API-Sports Data Fetching ---
+def get_api_sports_stats(h_team, a_team, match_date):
     api_key = st.secrets["api_keys"]["API_SPORTS_KEY"]
     headers = {'x-rapidapi-host': "v3.football.api-sports.io", 'x-rapidapi-key': api_key}
-    
-    # Major Leagues IDs for Domestic Standings Check
     MAJOR_LEAGUE_IDS = {'Premier League': 39, 'La Liga': 140, 'Serie A': 135, 'Bundesliga': 78, 'Ligue 1': 61}
     
     try:
         time.sleep(2)
-            # ၁။ Fixture ID နှင့် Team ID အစစ်အမှန်များကို ရှာဖွေခြင်း
-            search_url = f"https://v3.football.api-sports.io/fixtures?date={match_date}"
-            res = requests.get(search_url, headers=headers, timeout=15).json()
-            
-            fixture_obj = None
-            if 'response' in res and res['response']:
-                for f in res['response']:
-                    f_home = f['teams']['home']['name'].lower()
-                    f_away = f['teams']['away']['name'].lower()
-                    h_target = h_team.lower()
-                    a_target = a_team.lower()
-                    if (h_target in f_home or f_home in h_target) and (a_target in f_away or f_away in a_target):
-                        fixture_obj = f
-                        break
-            
-            if not fixture_obj: continue 
-            f_id = fixture_obj['fixture']['id']
-            h_real_id = fixture_obj['teams']['home']['id']
-            a_real_id = fixture_obj['teams']['away']['id']
-            league_id = fixture_obj['league']['id']
-            season = fixture_obj['league']['season']
+        search_url = f"https://v3.football.api-sports.io/fixtures?date={match_date}"
+        res = requests.get(search_url, headers=headers, timeout=15).json()
+        
+        fixture_obj = None
+        if 'response' in res and res['response']:
+            for f in res['response']:
+                f_home = f['teams']['home']['name'].lower()
+                f_away = f['teams']['away']['name'].lower()
+                if (h_team.lower() in f_home or f_home in h_team.lower()) and (a_team.lower() in f_away or f_away in a_team.lower()):
+                    fixture_obj = f
+                    break
+        
+        if not fixture_obj: raise Exception("Fixture not found")
+        f_id = fixture_obj['fixture']['id']
+        h_real_id = fixture_obj['teams']['home']['id']
+        a_real_id = fixture_obj['teams']['away']['id']
+        league_id = fixture_obj['league']['id']
+        season = fixture_obj['league']['season']
 
-            # ၂။ Standings (Current League + Major League Check) - API Structure အမှန်အတိုင်း ပြင်ဆင်ခြင်း
-            standings_data = ""
-            s_res = requests.get(f"https://v3.football.api-sports.io/standings?league={league_id}&season={season}", headers=headers, timeout=10).json()
-            if s_res.get('response') and s_res['response']:
-                # Standings list ထဲက group တစ်ခုချင်းစီကို ပတ်စစ်ခြင်း (Champions League Group များအတွက်)
-                for group in s_res['response'][0]['league']['standings']:
-                    for rank in group:
-                        if int(rank['team']['id']) in [int(h_real_id), int(a_real_id)]:
-                            standings_data += f"[{s_res['response'][0]['league']['name']}] {rank['team']['name']}: Rank {rank['rank']} (Pts: {rank['points']}, Form: {rank.get('form', 'N/A')}). "
+        standings_data = ""
+        s_res = requests.get(f"https://v3.football.api-sports.io/standings?league={league_id}&season={season}", headers=headers, timeout=10).json()
+        if s_res.get('response') and s_res['response']:
+            for group in s_res['response'][0]['league']['standings']:
+                for rank in group:
+                    if int(rank['team']['id']) in [int(h_real_id), int(a_real_id)]:
+                        standings_data += f"[{s_res['response'][0]['league']['name']}] {rank['team']['name']}: Rank {rank['rank']} (Pts: {rank['points']}, Form: {rank.get('form', 'N/A')}). "
 
-            if any(x in fixture_obj['league']['name'] for x in ["Champions League", "Europa League"]):
-                for m_name, m_id in MAJOR_LEAGUE_IDS.items():
-                    time.sleep(0.5)
-                    m_res = requests.get(f"https://v3.football.api-sports.io/standings?league={m_id}&season={season}", headers=headers, timeout=10).json()
-                    if m_res.get('response') and m_res['response']:
-                        for m_group in m_res['response'][0]['league']['standings']:
-                            for m_rank in m_group:
-                                if int(m_rank['team']['id']) in [int(h_real_id), int(a_real_id)]:
-                                    standings_data += f"[Domestic {m_name}] {m_rank['team']['name']}: Rank {m_rank['rank']} (Pts: {m_rank['points']}). "
+        pred_res = requests.get(f"https://v3.football.api-sports.io/predictions?fixture={f_id}", headers=headers, timeout=10).json()
+        inj_res = requests.get(f"https://v3.football.api-sports.io/injuries?fixture={f_id}", headers=headers, timeout=10).json()
+        h_l10 = requests.get(f"https://v3.football.api-sports.io/fixtures?team={h_real_id}&last=10&status=FT", headers=headers, timeout=10).json()
+        a_l10 = requests.get(f"https://v3.football.api-sports.io/fixtures?team={a_real_id}&last=10&status=FT", headers=headers, timeout=10).json()
+        
+        h_next = requests.get(f"https://v3.football.api-sports.io/fixtures?team={h_real_id}&next=2", headers=headers, timeout=10).json()
+        a_next = requests.get(f"https://v3.football.api-sports.io/fixtures?team={a_real_id}&next=2", headers=headers, timeout=10).json()
 
-            # ၃။ Predictions, Injuries, Last 10, Ratings, Next Match
-            pred_res = requests.get(f"https://v3.football.api-sports.io/predictions?fixture={f_id}", headers=headers, timeout=10).json()
-            inj_res = requests.get(f"https://v3.football.api-sports.io/injuries?fixture={f_id}", headers=headers, timeout=10).json()
-            h_l10 = requests.get(f"https://v3.football.api-sports.io/fixtures?team={h_real_id}&last=10&status=FT", headers=headers, timeout=10).json()
-            a_l10 = requests.get(f"https://v3.football.api-sports.io/fixtures?team={a_real_id}&last=10&status=FT", headers=headers, timeout=10).json()
-            
-            h_last_fid = h_l10['response'][0]['fixture']['id'] if h_l10.get('response') else None
-            a_last_fid = a_l10['response'][0]['fixture']['id'] if a_l10.get('response') else None
-            
-            h_rate_res = requests.get(f"https://v3.football.api-sports.io/fixtures/players?fixture={h_last_fid}&team={h_real_id}", headers=headers, timeout=10).json() if h_last_fid else {}
-            a_rate_res = requests.get(f"https://v3.football.api-sports.io/fixtures/players?fixture={a_last_fid}&team={a_real_id}", headers=headers, timeout=10).json() if a_last_fid else {}
-            
-            h_next = requests.get(f"https://v3.football.api-sports.io/fixtures?team={h_real_id}&next=2", headers=headers, timeout=10).json()
-            a_next = requests.get(f"https://v3.football.api-sports.io/fixtures?team={a_real_id}&next=2", headers=headers, timeout=10).json()
-
-            return {
-                'analysis': pred_res.get('response', [None])[0],
-                'injuries': inj_res.get('response', []),
-                'standings': standings_data if standings_data else "No Standings Found",
-                'h_last_10': h_l10.get('response', []),
-                'a_last_10': a_l10.get('response', []),
-                'h_ratings': h_rate_res.get('response', []),
-                'a_ratings': a_rate_res.get('response', []),
-                'h_schedule': h_next.get('response', []),
-                'a_schedule': a_next.get('response', []),
-                'h_id': h_real_id, 'a_id': a_real_id,
-                'league_name': fixture_obj['league']['name']
-            }
+        return {
+            'analysis': pred_res.get('response', [None])[0],
+            'injuries': inj_res.get('response', []),
+            'standings': standings_data if standings_data else "No Standings Found",
+            'h_last_10': h_l10.get('response', []),
+            'a_last_10': a_l10.get('response', []),
+            'h_schedule': h_next.get('response', []),
+            'a_schedule': a_next.get('response', []),
+            'h_id': h_real_id, 'a_id': a_real_id,
+            'league_name': fixture_obj['league']['name']
+        }
     except Exception as e:
         st.error(f"API-Sports Error: {str(e)}")
         return None
-    return None
 
-# --- Helper: AI Key Rotation ---
+# --- Helper: AI Response ---
 def get_gemini_response(prompt):
     ai_key = st.secrets["gemini_keys"]["GEMINI_KEY"]
     try:
         client = genai.Client(api_key=ai_key)
         response = client.models.generate_content(
-            model=\'gemini-flash-latest\',
+            model='gemini-flash-latest',
             contents=prompt,
-            config={\'temperature\': 0}
+            config={'temperature': 0}
         )
         return response.text
     except Exception as e:
         st.error(f"Gemini AI Error: {str(e)}")
         return "⚠️ AI Service Busy. Please try again later."
 
-
-
-
-# ၅။ Home vs Away Section
+# Home vs Away Section
 c1, cvs, c2 = st.columns([2, 1, 2])
 with c1:
     st.markdown(f'<p style="color:white; text-align:center; font-weight:900; font-size:12px;">{d[lang]["home"]}</p>', unsafe_allow_html=True)
@@ -394,10 +357,7 @@ if gen_click:
                 progress_bar.progress(percent_complete + 1)
                 
             with st.spinner('AI is analyzing real-time data from API...'):
-                match_utc = datetime.datetime.strptime(match_obj['utc_str'], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc)
-                expiry_dt_naive = datetime.datetime.now() + (match_utc + datetime.timedelta(hours=1) - datetime.datetime.now(datetime.timezone.utc))
-                
-                cache_key = f"pred_final_v12_major_{h_team}_{a_team}_{today_mm}"
+                cache_key = f"pred_final_v12_{h_team}_{a_team}_{today_mm}"
                 cached_result = get_disk_cache(cache_key)
 
                 if cached_result:
@@ -405,71 +365,33 @@ if gen_click:
                 else:
                     real_data = get_api_sports_stats(h_team, a_team, today_mm.isoformat())
                     if real_data:
-                        h_id, a_id = real_data['h_id'], real_data['a_id']
                         injury_list = [f"{i['player']['name']} ({i['player']['reason']})" for i in real_data.get('injuries', [])]
-                        
-                        h_top = []
-                        if real_data.get('h_ratings') and len(real_data['h_ratings']) > 0:
-                            for p in real_data['h_ratings'][0].get('players', []):
-                                r = p['statistics'][0]['games'].get('rating')
-                                if r and float(r) > 7.0: h_top.append(f"{p['player']['name']} ({r})")
-                            
-                        a_top = []
-                        if real_data.get('a_ratings') and len(real_data['a_ratings']) > 0:
-                            for p in real_data['a_ratings'][0].get('players', []):
-                                r = p['statistics'][0]['games'].get('rating')
-                                if r and float(r) > 7.0: a_top.append(f"{p['player']['name']} ({r})")
-
-                        h_n, a_n = (real_data['h_schedule'][0] if real_data['h_schedule'] else None), (real_data['a_schedule'][0] if real_data['a_schedule'] else None)
-                        h_next = f"[{h_n['league']['name']}] vs {h_n['teams']['away']['name'] if h_n['teams']['home']['id']==h_id else h_n['teams']['home']['name']}" if h_n else "N/A"
-                        a_next = f"[{a_n['league']['name']}] vs {a_n['teams']['away']['name'] if a_n['teams']['home']['id']==a_id else a_n['teams']['home']['name']}" if a_n else "N/A"
-
                         stats_context = f"""
                         [SOURCE: API-SPORTS VERIFIED DATA]
-                        - Match Context: {h_team} vs {a_team}
+                        - Match: {h_team} vs {a_team}
                         - Tournament: {real_data['league_name']}
-                        - STANDINGS (Points/Rank): {real_data['standings']}
-                        - SQUAD UPDATE (Injuries): {', '.join(injury_list) if injury_list else 'None Reported'}
-                        - TOP PERFORMERS: {h_team}: {', '.join(h_top[:3]) if h_top else 'N/A'} | {a_team}: {', '.join(a_top[:3]) if a_top else 'N/A'}
-                        - NEXT MATCH (Schedule): {h_team} vs {h_next} | {a_team} vs {a_next}
+                        - STANDINGS: {real_data['standings']}
+                        - INJURIES: {', '.join(injury_list) if injury_list else 'None'}
                         """
-
                         prompt = f"""
-                        SYSTEM INSTRUCTION: You are a professional 2026 tactical analyst.
-                        - STRICT: Use ONLY provided [SOURCE] data for facts.
-                        - KNOWLEDGE: Domestic Major Leagues are Premier League, La Liga, Serie A, Bundesliga, Ligue 1.
-                        - COMPARISON: Compare current {real_data['league_name']} standings with Domestic League status.
-                        - LOGIC: If a team is safe in Champions League but has a crucial Domestic title race/derby next, predict heavy rotation.
-                        
+                        SYSTEM: Professional Tactical Analyst.
                         {stats_context}
-
-                        Respond strictly in BURMESE (Unicode).
-
-                        OUTPUT FORMAT:
+                        Respond in BURMESE (Unicode).
+                        FORMAT:
                         # သုံးသပ်ချက်
-                        **{h_team} ခြေစွမ်းနှင့် ပြိုင်ပွဲစုံရပ်တည်မှု** (ပြည်တွင်းလိဂ်နှင့် {real_data['league_name']} အဆင့်ကို နှိုင်းယှဉ်၍ ၅ ကြောင်း)
-                        **{a_team} ခြေစွမ်းနှင့် ပြိုင်ပွဲစုံရပ်တည်မှု** (ပြည်တွင်းလိဂ်နှင့် {real_data['league_name']} အဆင့်ကို နှိုင်းယှဉ်၍ ၅ ကြောင်း)
-                        **ပွဲစဉ်ဦးစားပေးမှုနှင့် Squad Rotation** (လာမည့် ပြည်တွင်းလိဂ်ပွဲ၏အရေးကြီးပုံကို ကိုးကား၍ ၅ ကြောင်း)
-                        **နည်းဗျူဟာပိုင်းဆိုင်ရာ ခွဲခြမ်းစိတ်ဖြာမှု** (၅ ကြောင်း)
-
+                        **{h_team} ခြေစွမ်း**
+                        **{a_team} ခြေစွမ်း**
+                        **နည်းဗျူဟာပိုင်း**
                         ### **Summarize Table**
                         | Category | Prediction |
                         | :--- | :--- |
-                        | Winner Team | [မြန်မာလို] |
-                        | Correct Score | [Result] |
-                        | Goal under/over | [Result] |
-                        | BTTS (Yes/No) | [Result] |
-
+                        | Winner | [မြန်မာလို] |
+                        | Score | [Result] |
                         # **🏆 အကျိုးအကြောင်းခိုင်လုံဆုံးရွေးချယ်မှု: [ရလဒ်]**
-                        Reasoning: (Domestic League Ranking, Current Tournament Standing နှင့် Schedule တို့ကို ပေါင်းစပ်၍ ၆ ကြောင်း တိကျစွာဖြေဆိုပါ)
                         """
                         response_text = get_gemini_response(prompt)
                         final_output = f'<div style="background:#0c0c0c; padding:20px; border-radius:15px; border:1px solid #39FF14; color:white;">{response_text}</div>'
-                        set_disk_cache(cache_key, final_output, expiry_dt=expiry_dt_naive)
+                        set_disk_cache(cache_key, final_output)
                         st.markdown(final_output, unsafe_allow_html=True)
-                    else:
-                        st.error("No real-time data available from API.")
-        else:
-            st.error(f"⚠️ {d[lang]['no_match']}")
     else:
         st.warning("Please select teams first!")
