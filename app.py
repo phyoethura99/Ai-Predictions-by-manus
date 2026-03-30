@@ -81,14 +81,14 @@ with col_lang:
     st.button(LANG_MAP[lang]["trans_btn"], key="lang_btn", on_click=toggle_lang, use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-st.markdown(f"<div class=\"title-style\">{LANG_MAP[lang]["title1"]}</div>", unsafe_allow_html=True)
+st.markdown(f"""<div class="title-style">{LANG_MAP[lang]['title1']}</div>""", unsafe_allow_html=True)
 
 # Select League & Date
-st.markdown(f"<p style=\"color:#aaa; margin-left:15px;\">{LANG_MAP[lang]["sel_league"]}</p>", unsafe_allow_html=True)
+st.markdown(f"""<p style="color:#aaa; margin-left:15px;">{LANG_MAP[lang]['sel_league']}</p>""", unsafe_allow_html=True)
 league_keys = list(LEAGUE_CODES.keys())
 league = st.selectbox("L", league_keys, index=1, label_visibility="collapsed")
 
-st.markdown(f"<p style=\"color:#aaa; margin-left:15px; margin-top:15px;\">{LANG_MAP[lang]["sel_date"]}</p>", unsafe_allow_html=True)
+st.markdown(f"""<p style="color:#aaa; margin-left:15px; margin-top:15px;">{LANG_MAP[lang]['sel_date']}</p>""", unsafe_allow_html=True)
 date_option = st.radio("Date Option", LANG_MAP[lang]["date_opts"], horizontal=True, label_visibility="collapsed")
 sel_date = st.date_input("D", value=today_mm, min_value=today_mm, label_visibility="collapsed")
 
@@ -170,18 +170,19 @@ if check_click:
                             a_set.add(away_team_name)
                 
                 st.session_state.display_matches = all_matches
-                st.session_state.h_teams = ["Select Team"] + sorted(list(h_set)) if h_set else ["No matches found"]
-                st.session_state.a_teams = ["Select Team"] + sorted(list(a_set)) if a_set else ["No matches found"]
-                
-                cache_expiry = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=59)
-                set_disk_cache(table_cache_key, {
-                    "matches": st.session_state.display_matches,
-                    "h_teams": st.session_state.h_teams,
-                    "a_teams": st.session_state.a_teams
+                if all_matches:
+                    st.session_state.h_teams = ["Select Team"] + sorted(list(h_set))
+                    st.session_state.a_teams = ["Select Team"] + sorted(list(a_set))
+                    
+                    cache_expiry = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=59)
+                    set_disk_cache(table_cache_key, {
+                        "matches": st.session_state.display_matches,
+                        "h_teams": st.session_state.h_teams,
+                        "a_teams": st.session_state.a_teams
                 }, expiry_dt=cache_expiry)
-            else:
-                st.session_state.h_teams = ["No matches found"]
-                st.session_state.a_teams = ["No matches found"]
+                if not st.session_state.display_matches:
+                    st.session_state.h_teams = ["No matches found"]
+                    st.session_state.a_teams = ["No matches found"]
         except Exception as e:
             st.error(f"Error: {str(e)}")
 
@@ -192,7 +193,7 @@ if st.session_state.display_matches:
         grouped_matches.setdefault(match["league"], []).append(match)
     
     for l_title, matches_list in grouped_matches.items():
-        st.markdown(f"<div style=\"color:#FFD700; font-weight:bold; margin: 15px 0 5px 15px; border-bottom: 1px solid #333;\">🏆 {l_title}</div>", unsafe_allow_html=True)
+        st.markdown(f"""<div style="color:#FFD700; font-weight:bold; margin: 15px 0 5px 15px; border-bottom: 1px solid #333;">🏆 {l_title}</div>""", unsafe_allow_html=True)
         for idx, m in enumerate(matches_list, 1):
             st.markdown(f"""
                 <div class=\"match-row\" style=\"height: auto; padding: 15px 10px;\">
@@ -214,7 +215,7 @@ if st.session_state.display_matches:
 if st.session_state.check_performed and not st.session_state.display_matches:
     st.warning(LANG_MAP[lang]["no_fixture"])
 elif st.session_state.check_performed and st.session_state.display_matches:
-    st.markdown(f"<div class=\"title-style\">{LANG_MAP[lang]["title2"]}</div>", unsafe_allow_html=True)
+    st.markdown(f"""<div class="title-style">{LANG_MAP[lang]['title2']}</div>""", unsafe_allow_html=True)
     
     col_home, col_away = st.columns(2)
     with col_home:
@@ -262,4 +263,4 @@ elif st.session_state.check_performed and st.session_state.display_matches:
             st.warning(LANG_MAP[lang]["no_match"])
     else:
         st.info("Please select both home and away teams to generate predictions.")
-                    
+
